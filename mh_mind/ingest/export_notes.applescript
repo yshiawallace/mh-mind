@@ -1,0 +1,4 @@
+-- AppleScript to export all Apple Notes as Markdown + YAML frontmatter.
+-- Emits one file per note into mh_mind/ingest/../../notes_export/ with fields:
+-- title, folder, created, modified, body.
+-- Implementation pending.

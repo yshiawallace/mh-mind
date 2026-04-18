@@ -13,7 +13,7 @@ from mh_mind.config import EMBEDDING_DIM, EMBEDDING_MODEL
 
 logger = logging.getLogger(__name__)
 
-_BATCH_SIZE = 2048  # OpenAI API max inputs per call
+_BATCH_SIZE = 50  # ~25K tokens per request at 512 tokens/chunk (API limit: 30K)
 
 # Lazy-loaded singleton client
 _client: OpenAI | None = None

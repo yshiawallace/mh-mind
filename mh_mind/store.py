@@ -7,7 +7,7 @@ vec0 virtual table. Both tables are joined by rowid.
 import json
 import sqlite3
 import struct
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 
 import sqlite_vec
@@ -22,7 +22,7 @@ def _serialize_f32(vec: list[float]) -> bytes:
 
 
 @contextmanager
-def _connect(db_path: Path):
+def connect(db_path: Path):
     """Open a connection with the sqlite-vec extension loaded."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path))
@@ -38,7 +38,7 @@ def _connect(db_path: Path):
 
 def init_db(db_path: Path) -> None:
     """Create the chunks and embedding tables if they don't exist."""
-    with _connect(db_path) as conn:
+    with connect(db_path) as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS chunks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,8 +46,7 @@ def init_db(db_path: Path) -> None:
                 source TEXT NOT NULL,
                 source_id TEXT NOT NULL,
                 position INTEGER NOT NULL,
-                metadata TEXT NOT NULL DEFAULT '{}',
-                content_hash TEXT NOT NULL DEFAULT ''
+                metadata TEXT NOT NULL DEFAULT '{}'
             )
         """)
         conn.execute("""
@@ -67,6 +66,7 @@ def init_db(db_path: Path) -> None:
                 last_synced TEXT NOT NULL
             )
         """)
+        assert isinstance(EMBEDDING_DIM, int)
         conn.execute(f"""
             CREATE VIRTUAL TABLE IF NOT EXISTS chunk_embeddings USING vec0(
                 embedding float[{EMBEDDING_DIM}]
@@ -79,6 +79,7 @@ def upsert_chunks(
     db_path: Path,
     chunks: list[Chunk],
     embeddings: list[list[float]],
+    conn: sqlite3.Connection | None = None,
 ) -> None:
     """Insert or replace chunks and their embeddings transactionally.
 
@@ -90,7 +91,7 @@ def upsert_chunks(
     if len(chunks) != len(embeddings):
         raise ValueError(f"chunks ({len(chunks)}) and embeddings ({len(embeddings)}) must be the same length")
 
-    with _connect(db_path) as conn:
+    with nullcontext(conn) if conn else connect(db_path) as conn:
         # Group chunks by source_id to delete old versions
         source_ids = {c.source_id for c in chunks}
 
@@ -118,11 +119,17 @@ def upsert_chunks(
         conn.commit()
 
 
-def update_source_hash(db_path: Path, source_id: str, source: str, content_hash: str) -> None:
+def update_source_hash(
+    db_path: Path,
+    source_id: str,
+    source: str,
+    content_hash: str,
+    conn: sqlite3.Connection | None = None,
+) -> None:
     """Record or update the content hash for a source document."""
     from datetime import datetime
 
-    with _connect(db_path) as conn:
+    with nullcontext(conn) if conn else connect(db_path) as conn:
         conn.execute(
             """
             INSERT INTO source_files (source_id, source, content_hash, last_synced)
@@ -136,9 +143,13 @@ def update_source_hash(db_path: Path, source_id: str, source: str, content_hash:
         conn.commit()
 
 
-def get_source_hash(db_path: Path, source_id: str) -> str | None:
+def get_source_hash(
+    db_path: Path,
+    source_id: str,
+    conn: sqlite3.Connection | None = None,
+) -> str | None:
     """Get the stored content hash for a source document, or None if not yet ingested."""
-    with _connect(db_path) as conn:
+    with nullcontext(conn) if conn else connect(db_path) as conn:
         row = conn.execute(
             "SELECT content_hash FROM source_files WHERE source_id = ?",
             (source_id,),
@@ -151,49 +162,62 @@ def search(
     query_embedding: list[float],
     scope: str = "both",
     top_k: int = 10,
+    conn: sqlite3.Connection | None = None,
 ) -> list[dict]:
     """Find the top_k most similar chunks to the query embedding.
 
     Args:
         db_path: Path to the SQLite database.
-        query_embedding: 768-dim query vector.
+        query_embedding: 3,072-dim query vector.
         scope: "notes", "docs", or "both".
         top_k: Number of results to return.
 
     Returns:
         List of dicts with keys: text, source, source_id, position, metadata, distance.
     """
-    with _connect(db_path) as conn:
-        # sqlite-vec KNN query: retrieve more candidates if we need to filter by scope
+    with nullcontext(conn) if conn else connect(db_path) as conn:
+        serialized_query = _serialize_f32(query_embedding)
+
+        # sqlite-vec doesn't support pre-filtering, so we overfetch and filter.
+        # If the corpus is skewed (e.g. mostly notes), we may need to widen the
+        # search to find enough results for the requested scope.
         fetch_k = top_k if scope == "both" else top_k * 3
+        max_fetch = top_k * 50
 
-        rows = conn.execute(
-            """
-            SELECT
-                c.id, c.text, c.source, c.source_id, c.position, c.metadata,
-                v.distance
-            FROM chunk_embeddings v
-            JOIN chunks c ON c.id = v.rowid
-            WHERE v.embedding MATCH ?
-                AND k = ?
-            ORDER BY v.distance
-            """,
-            (_serialize_f32(query_embedding), fetch_k),
-        ).fetchall()
+        while True:
+            rows = conn.execute(
+                """
+                SELECT
+                    c.id, c.text, c.source, c.source_id, c.position, c.metadata,
+                    v.distance
+                FROM chunk_embeddings v
+                JOIN chunks c ON c.id = v.rowid
+                WHERE v.embedding MATCH ?
+                    AND k = ?
+                ORDER BY v.distance
+                """,
+                (serialized_query, fetch_k),
+            ).fetchall()
 
-        results = []
-        for row in rows:
-            if scope != "both" and row["source"] != scope:
-                continue
-            results.append({
-                "text": row["text"],
-                "source": row["source"],
-                "source_id": row["source_id"],
-                "position": row["position"],
-                "metadata": json.loads(row["metadata"]),
-                "distance": row["distance"],
-            })
-            if len(results) >= top_k:
+            results = []
+            for row in rows:
+                if scope != "both" and row["source"] != scope:
+                    continue
+                results.append({
+                    "text": row["text"],
+                    "source": row["source"],
+                    "source_id": row["source_id"],
+                    "position": row["position"],
+                    "metadata": json.loads(row["metadata"]),
+                    "distance": row["distance"],
+                })
+                if len(results) >= top_k:
+                    break
+
+            # Stop if we have enough results, or if the DB returned fewer rows
+            # than we asked for (meaning we've exhausted all candidates).
+            if len(results) >= top_k or len(rows) < fetch_k or fetch_k >= max_fetch:
                 break
+            fetch_k = min(fetch_k * 2, max_fetch)
 
         return results

@@ -5,10 +5,11 @@ stays local — only individual chunks are sent per API call.
 """
 
 import logging
+import os
 
 from openai import OpenAI
 
-from mh_mind.config import EMBEDDING_DIM, EMBEDDING_MODEL, OPENAI_API_KEY
+from mh_mind.config import EMBEDDING_DIM, EMBEDDING_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,12 @@ _client: OpenAI | None = None
 def _get_client() -> OpenAI:
     global _client
     if _client is None:
-        _client = OpenAI(api_key=OPENAI_API_KEY)
+        api_key = os.environ.get("OPENAI_API_KEY", "")
+        if not api_key:
+            raise ValueError(
+                "OPENAI_API_KEY is not set. Add it to your .env file or environment."
+            )
+        _client = OpenAI(api_key=api_key, max_retries=3)
     return _client
 
 

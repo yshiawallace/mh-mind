@@ -1,5 +1,7 @@
 """mh-mind Streamlit UI — chat with your notes."""
 
+import uuid
+
 import streamlit as st
 
 from mh_mind.artifacts import save_transcript
@@ -57,6 +59,7 @@ with st.sidebar:
     if st.button("New conversation"):
         st.session_state.messages = []
         st.session_state.transcript = []
+        st.session_state.session_id = uuid.uuid4().hex[:8]
         st.rerun()
 
 # --- Session state ---
@@ -64,6 +67,8 @@ if "messages" not in st.session_state:
     st.session_state.messages = []  # list of {"role": ..., "content": ...}
 if "transcript" not in st.session_state:
     st.session_state.transcript = []  # list of (query, ChatResponse)
+if "session_id" not in st.session_state:
+    st.session_state.session_id = uuid.uuid4().hex[:8]
 
 # --- Display chat history ---
 for msg in st.session_state.messages:
@@ -88,10 +93,12 @@ if prompt := st.chat_input("Ask a question about your notes"):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Build conversation history for multi-turn context
+    # Build conversation history for multi-turn context.
+    # Cap at the last 20 messages to avoid exceeding the LLM context window.
+    recent_messages = st.session_state.messages[-21:-1]
     history = [
         Message(role=m["role"], content=m["content"])
-        for m in st.session_state.messages[:-1]  # exclude the current query
+        for m in recent_messages
         if m["role"] in ("user", "assistant")
     ]
 
@@ -127,5 +134,6 @@ if prompt := st.chat_input("Ask a question about your notes"):
         st.session_state.transcript,
         topic=topic,
         scope=scope,
+        session_id=st.session_state.session_id,
     )
     st.sidebar.caption(f"Saved to `{artifact_path.name}`")

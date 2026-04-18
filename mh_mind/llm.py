@@ -27,9 +27,15 @@ class OpenRouterProvider(LLMProvider):
 
     def __init__(self, model: str = DEFAULT_LLM_MODEL, api_key: str | None = None):
         self.model = model
+        resolved_key = api_key or os.environ.get("OPENROUTER_API_KEY", "")
+        if not resolved_key:
+            raise ValueError(
+                "OPENROUTER_API_KEY is not set. Add it to your .env file or environment."
+            )
         self.client = OpenAI(
             base_url="https://openrouter.ai/api/v1",
-            api_key=api_key or os.environ.get("OPENROUTER_API_KEY", ""),
+            api_key=resolved_key,
+            max_retries=3,
         )
 
     def complete(self, messages: list[Message], temperature: float = 0.3) -> str:

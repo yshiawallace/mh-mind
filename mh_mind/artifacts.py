@@ -20,6 +20,7 @@ def save_transcript(
     transcript: list[tuple[str, ChatResponse]],
     topic: str,
     scope: str = "both",
+    session_id: str | None = None,
 ) -> Path:
     """Save a chat transcript as a Markdown file.
 
@@ -27,6 +28,8 @@ def save_transcript(
         transcript: List of (user_query, ChatResponse) pairs.
         topic: Short topic string (used in the filename).
         scope: The search scope used during the session.
+        session_id: If provided, creates a deterministic filename per session
+                    (overwrites on each turn instead of creating new files).
 
     Returns:
         Path to the saved artifact file.
@@ -35,14 +38,14 @@ def save_transcript(
 
     date_str = datetime.now().strftime("%Y-%m-%d")
     slug = _slugify(topic) if topic else "chat"
-    filename = f"{date_str}_{slug}.md"
-    filepath = ARTIFACTS_DIR / filename
 
-    # Avoid overwriting — append a counter if needed
-    counter = 1
-    while filepath.exists():
-        counter += 1
-        filepath = ARTIFACTS_DIR / f"{date_str}_{slug}_{counter}.md"
+    if session_id:
+        # Deterministic filename — same session overwrites the same file
+        filename = f"{date_str}_{session_id}_{slug}.md"
+    else:
+        filename = f"{date_str}_{slug}.md"
+
+    filepath = ARTIFACTS_DIR / filename
 
     # Collect all unique source IDs for frontmatter
     all_source_ids = set()

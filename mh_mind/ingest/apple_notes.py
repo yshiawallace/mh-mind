@@ -4,7 +4,6 @@ Exports all notes from Notes.app as Markdown files with YAML frontmatter,
 then reads them back into AppleNote dataclasses.
 """
 
-import hashlib
 import logging
 import re
 import subprocess
@@ -156,11 +155,6 @@ def _parse_exported_file(path: Path) -> AppleNote | None:
     except (KeyError, ValueError) as e:
         logger.warning("Skipping %s: missing or bad metadata: %s", path, e)
         return None
-
-
-def _content_hash(note: AppleNote) -> str:
-    """Hash the note body for change detection."""
-    return hashlib.sha256(note.body.encode()).hexdigest()[:16]
 
 
 def export_notes(

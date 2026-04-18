@@ -6,7 +6,7 @@ and returns WordDoc dataclasses. Skips .doc (pre-2007) files with a warning.
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from docx import Document
@@ -50,7 +50,7 @@ def _parse_docx(path: Path) -> WordDoc | None:
     title = path.stem
 
     # Use filesystem modification time
-    modified = datetime.fromtimestamp(path.stat().st_mtime)
+    modified = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
 
     return WordDoc(title=title, body=body, path=path, modified=modified)
 

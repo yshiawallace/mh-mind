@@ -1,5 +1,4 @@
 import logging
-import os
 from pathlib import Path
 
 import yaml
@@ -21,8 +20,6 @@ CHUNK_SIZE_TOKENS = 512
 CHUNK_OVERLAP_TOKENS = 64
 
 DEFAULT_LLM_MODEL = "anthropic/claude-sonnet-4-5"
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
 
 def load_docs_paths() -> list[Path]:

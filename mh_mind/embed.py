@@ -1,70 +1,62 @@
-"""Local embedding using nomic-ai/nomic-embed-text-v1.5.
+"""Embeddings via OpenAI text-embedding-3-large (3,072-dim).
 
-The model runs entirely on-CPU — your corpus never leaves the machine.
-Vectors are 768-dimensional.
-
-Important: nomic models require task prefixes:
-  - "search_document: " when embedding chunks for storage
-  - "search_query: " when embedding the user's question
-Omitting these prefixes silently degrades retrieval quality.
+Chunk text is sent to OpenAI's API for embedding. The full corpus
+stays local — only individual chunks are sent per API call.
 """
 
 import logging
 
-from sentence_transformers import SentenceTransformer
+from openai import OpenAI
 
-from mh_mind.config import EMBEDDING_MODEL
+from mh_mind.config import EMBEDDING_DIM, EMBEDDING_MODEL, OPENAI_API_KEY
 
 logger = logging.getLogger(__name__)
 
-EMBEDDING_DIM = 768
+_BATCH_SIZE = 2048  # OpenAI API max inputs per call
 
-# Lazy-loaded singleton — the model is ~500 MB and takes a few seconds to load,
-# so we only do it once and only when actually needed.
-_model: SentenceTransformer | None = None
+# Lazy-loaded singleton client
+_client: OpenAI | None = None
 
 
-def _get_model() -> SentenceTransformer:
-    global _model
-    if _model is None:
-        logger.info("Loading embedding model %s (first call, may take a moment)...", EMBEDDING_MODEL)
-        _model = SentenceTransformer(EMBEDDING_MODEL, trust_remote_code=True)
-        logger.info("Embedding model loaded.")
-    return _model
+def _get_client() -> OpenAI:
+    global _client
+    if _client is None:
+        _client = OpenAI(api_key=OPENAI_API_KEY)
+    return _client
 
 
 def embed_documents(texts: list[str]) -> list[list[float]]:
     """Embed a batch of document chunks for storage.
 
-    Prepends the 'search_document: ' prefix required by nomic models.
-
     Args:
         texts: List of chunk texts.
 
     Returns:
-        List of 768-dim embedding vectors.
+        List of 3,072-dim embedding vectors.
     """
     if not texts:
         return []
 
-    model = _get_model()
-    prefixed = [f"search_document: {t}" for t in texts]
-    embeddings = model.encode(prefixed, show_progress_bar=len(texts) > 50)
-    return [e.tolist() for e in embeddings]
+    client = _get_client()
+    all_embeddings: list[list[float]] = []
+
+    for i in range(0, len(texts), _BATCH_SIZE):
+        batch = texts[i : i + _BATCH_SIZE]
+        response = client.embeddings.create(model=EMBEDDING_MODEL, input=batch)
+        all_embeddings.extend([item.embedding for item in response.data])
+
+    return all_embeddings
 
 
 def embed_query(text: str) -> list[float]:
     """Embed a single user query for retrieval.
 
-    Prepends the 'search_query: ' prefix required by nomic models.
-
     Args:
         text: The user's question.
 
     Returns:
-        A single 768-dim embedding vector.
+        A single 3,072-dim embedding vector.
     """
-    model = _get_model()
-    prefixed = f"search_query: {text}"
-    embedding = model.encode([prefixed])
-    return embedding[0].tolist()
+    client = _get_client()
+    response = client.embeddings.create(model=EMBEDDING_MODEL, input=[text])
+    return response.data[0].embedding

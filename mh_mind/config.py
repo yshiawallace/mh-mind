@@ -15,11 +15,13 @@ NOTES_EXPORT_DIR = DATA_DIR / "notes_export"
 DOCS_PATHS_CONFIG = DATA_DIR / "docs_paths.yaml"
 ARTIFACTS_DIR = DATA_DIR / "artifacts"
 
-EMBEDDING_MODEL = "nomic-ai/nomic-embed-text-v1.5"
+EMBEDDING_MODEL = "text-embedding-3-large"
+EMBEDDING_DIM = 3072
 CHUNK_SIZE_TOKENS = 512
 CHUNK_OVERLAP_TOKENS = 64
 
 DEFAULT_LLM_MODEL = "anthropic/claude-sonnet-4-5"
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
 

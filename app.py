@@ -10,6 +10,29 @@ st.set_page_config(page_title="mh-mind", layout="wide")
 st.title("mh-mind")
 st.caption("Chat with your notes.")
 
+# --- Temperature label mapping ---
+_CREATIVITY_LABELS = {
+    0.0: "Precise",
+    0.3: "Balanced",
+    0.7: "Creative",
+    1.0: "Adventurous",
+    1.5: "Wild",
+    2.0: "Unhinged",
+}
+_CREATIVITY_BREAKPOINTS = sorted(_CREATIVITY_LABELS.keys())
+
+
+def _get_creativity_label(temp: float) -> str:
+    """Return the descriptive label for the nearest lower breakpoint."""
+    label_key = _CREATIVITY_BREAKPOINTS[0]
+    for bp in _CREATIVITY_BREAKPOINTS:
+        if bp <= temp:
+            label_key = bp
+        else:
+            break
+    return _CREATIVITY_LABELS[label_key]
+
+
 # --- Sidebar controls ---
 with st.sidebar:
     scope = st.radio(
@@ -22,6 +45,14 @@ with st.sidebar:
         }[s],
         index=0,
     )
+    temperature = st.slider(
+        "Creativity level",
+        min_value=0.0,
+        max_value=2.0,
+        value=0.3,
+        step=0.1,
+    )
+    st.caption(f"**{_get_creativity_label(temperature)}** ({temperature:.1f})")
     st.divider()
     if st.button("New conversation"):
         st.session_state.messages = []
@@ -67,7 +98,7 @@ if prompt := st.chat_input("Ask a question about your notes"):
     # Get the answer
     with st.chat_message("assistant"):
         with st.spinner("Searching your notes..."):
-            response: ChatResponse = answer(prompt, scope=scope, conversation_history=history)
+            response: ChatResponse = answer(prompt, scope=scope, conversation_history=history, temperature=temperature)
 
         st.markdown(response.answer)
 

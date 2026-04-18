@@ -1,17 +1,18 @@
 """Token-based text chunker.
 
 Splits text into chunks of CHUNK_SIZE_TOKENS tokens with CHUNK_OVERLAP_TOKENS
-overlap. Uses the nomic model's tokenizer so token counts match the embedder.
+overlap. Uses tiktoken (cl100k_base) for token counting, matching the OpenAI
+embedding model.
 """
 
 from dataclasses import dataclass
 
-from transformers import AutoTokenizer
+import tiktoken
 
-from mh_mind.config import CHUNK_OVERLAP_TOKENS, CHUNK_SIZE_TOKENS, EMBEDDING_MODEL
+from mh_mind.config import CHUNK_OVERLAP_TOKENS, CHUNK_SIZE_TOKENS
 
-# Load the tokenizer once (lightweight — no model weights)
-_tokenizer = AutoTokenizer.from_pretrained(EMBEDDING_MODEL, trust_remote_code=True)
+# Load the tokenizer once (lightweight, no model download)
+_tokenizer = tiktoken.get_encoding("cl100k_base")
 
 
 @dataclass
@@ -49,7 +50,7 @@ def chunk_text(
     if not text.strip():
         return []
 
-    token_ids = _tokenizer.encode(text, add_special_tokens=False)
+    token_ids = _tokenizer.encode(text)
 
     # If the whole text fits in one chunk, return it as-is
     if len(token_ids) <= chunk_size:
@@ -62,7 +63,7 @@ def chunk_text(
     for start in range(0, len(token_ids), step):
         end = min(start + chunk_size, len(token_ids))
         chunk_ids = token_ids[start:end]
-        chunk_text_str = _tokenizer.decode(chunk_ids, skip_special_tokens=True).strip()
+        chunk_text_str = _tokenizer.decode(chunk_ids).strip()
 
         if chunk_text_str:
             chunks.append(Chunk(

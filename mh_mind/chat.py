@@ -80,6 +80,7 @@ def answer(
     scope: str = "both",
     conversation_history: list[Message] | None = None,
     top_k: int = 10,
+    temperature: float = 0.3,
 ) -> ChatResponse:
     """Answer a query using retrieved context and the LLM.
 
@@ -88,6 +89,7 @@ def answer(
         scope: "notes", "docs", or "both".
         conversation_history: Prior messages in the session (for multi-turn).
         top_k: Number of context chunks to retrieve.
+        temperature: LLM sampling temperature (0.0=precise, 2.0=very creative).
 
     Returns:
         ChatResponse with the answer and source list.
@@ -122,7 +124,7 @@ Question: {query}"""
 
     # Call the LLM
     provider = get_provider()
-    raw_answer = provider.complete(messages)
+    raw_answer = provider.complete(messages, temperature=temperature)
 
     # Validate citations
     validated_answer = _validate_citations(raw_answer, len(sources))

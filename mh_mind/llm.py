@@ -17,7 +17,7 @@ class Message:
 
 class LLMProvider(ABC):
     @abstractmethod
-    def complete(self, messages: list[Message]) -> str:
+    def complete(self, messages: list[Message], temperature: float = 0.3) -> str:
         """Send messages to the LLM and return the assistant's response text."""
         ...
 
@@ -32,10 +32,11 @@ class OpenRouterProvider(LLMProvider):
             api_key=api_key or os.environ.get("OPENROUTER_API_KEY", ""),
         )
 
-    def complete(self, messages: list[Message]) -> str:
+    def complete(self, messages: list[Message], temperature: float = 0.3) -> str:
         response = self.client.chat.completions.create(
             model=self.model,
             messages=[{"role": m.role, "content": m.content} for m in messages],
+            temperature=temperature,
         )
         return response.choices[0].message.content or ""
 

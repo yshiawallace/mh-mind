@@ -2,24 +2,25 @@
 
 A personal app for chatting with your Apple Notes and Word documents.
 
-Your corpus is stored and indexed locally. Only the top-K retrieved chunks for a given query are sent to an LLM provider (OpenRouter by default). The full corpus never leaves your machine.
+Your corpus is stored and indexed locally. Chunk text is sent to OpenAI for embedding; only the top-K retrieved chunks for a given query are sent to OpenRouter for generation. The full corpus is never uploaded in bulk.
 
 ## Architecture
 
 - **Ingestion** — Apple Notes via AppleScript → Markdown + YAML frontmatter; Word docs via `python-docx` over configured folders.
 - **Chunking** — uniform 512-token chunks with 64-token overlap, both sources.
-- **Embeddings** — local `nomic-ai/nomic-embed-text-v1.5` via `sentence-transformers`.
+- **Embeddings** — OpenAI `text-embedding-3-large` (3,072-dim).
 - **Vector store** — `sqlite-vec` in a single SQLite file at `~/mh-mind/corpus.db`.
 - **Retrieval** — vector search with a source-scope filter: `notes` / `docs` / `both`.
 - **Generation** — OpenRouter (default `anthropic/claude-sonnet-4-5`) behind a swappable `LLMProvider` interface.
-- **UI** — Streamlit, runs locally in your browser.
+- **UI** — Streamlit, runs locally in your browser, with a creativity level slider and search scope toggle.
 - **Artifacts** — every chat session auto-saved as Markdown under `~/mh-mind/artifacts/`.
 
 ## Requirements
 
 - macOS (required for Apple Notes export via AppleScript)
 - Python 3.11+
-- An [OpenRouter](https://openrouter.ai/) API key
+- An [OpenAI](https://platform.openai.com/) API key (for embeddings)
+- An [OpenRouter](https://openrouter.ai/) API key (for chat generation)
 
 ## Setup
 
@@ -32,25 +33,26 @@ Your corpus is stored and indexed locally. Only the top-K retrieved chunks for a
 
    With [uv](https://docs.astral.sh/uv/) (recommended):
    ```bash
-   uv sync --extra embed
+   uv sync
    ```
 
    Or with pip:
    ```bash
    python -m venv .venv
    source .venv/bin/activate
-   pip install -e ".[embed]"
+   pip install -e .
    ```
 
-2. **Add your OpenRouter API key:**
+2. **Add your API keys:**
 
    ```bash
    cp .env.example .env
    ```
 
-   Open `.env` and paste your key:
+   Open `.env` and paste both keys:
    ```
    OPENROUTER_API_KEY=sk-or-v1-your-key-here
+   OPENAI_API_KEY=sk-your-openai-key-here
    ```
 
 3. **Configure Word doc folders** (optional — skip if you only want Apple Notes):
@@ -74,9 +76,9 @@ Your corpus is stored and indexed locally. Only the top-K retrieved chunks for a
 mh-mind sync
 ```
 
-This exports your Apple Notes, parses your Word docs, chunks everything, generates embeddings locally, and stores it all in `~/mh-mind/corpus.db`.
+This exports your Apple Notes, parses your Word docs, chunks everything, generates embeddings via OpenAI, and stores it all in `~/mh-mind/corpus.db`.
 
-- First run: downloads the embedding model (~500 MB) and processes your entire corpus. This may take a few minutes.
+- First run: processes your entire corpus. This may take a few minutes.
 - Subsequent runs: only processes new or changed content (incremental).
 
 ### Chat with your notes
@@ -90,6 +92,7 @@ Opens the chat UI at [http://localhost:8501](http://localhost:8501). From there 
 - Ask questions and get answers with inline `[1]` `[2]` citations
 - Click any citation to expand the source excerpt
 - Toggle the search scope between **Apple Notes**, **Word docs**, or **Both**
+- Adjust the **Creativity level** slider (Precise → Balanced → Creative → Adventurous → Wild → Unhinged)
 - Start a new conversation from the sidebar
 
 Every conversation is auto-saved as a Markdown file in `~/mh-mind/artifacts/`.

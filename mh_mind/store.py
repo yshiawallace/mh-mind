@@ -13,7 +13,7 @@ from pathlib import Path
 import sqlite_vec
 
 from mh_mind.chunk import Chunk
-from mh_mind.embed import EMBEDDING_DIM
+from mh_mind.config import EMBEDDING_DIM
 
 
 def _serialize_f32(vec: list[float]) -> bytes:

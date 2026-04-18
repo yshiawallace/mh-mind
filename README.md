@@ -57,12 +57,20 @@ Your corpus is stored and indexed locally. Chunk text is sent to OpenAI for embe
 
 3. **Configure Word doc folders** (optional — skip if you only want Apple Notes):
 
-   Create `~/mh-mind/docs_paths.yaml` with a list of folders containing your `.docx` files:
+   Create the data directory and config file:
+
+   ```bash
+   mkdir -p ~/mh-mind
+   ```
+
+   Then create `~/mh-mind/docs_paths.yaml` with a list of folders containing your `.docx` files:
 
    ```yaml
    - /Users/yourname/Documents/Papers
    - /Users/yourname/Dropbox/Drafts
    ```
+
+   Note: this file lives in the `~/mh-mind/` data directory, not in the project repo.
 
 4. **Grant Automation access:**
 
@@ -70,10 +78,12 @@ Your corpus is stored and indexed locally. Chunk text is sent to OpenAI for embe
 
 ## Usage
 
+If you installed with **uv**, prefix commands with `uv run` (or activate the venv with `source .venv/bin/activate` first).
+
 ### Sync your corpus
 
 ```bash
-mh-mind sync
+uv run mh-mind sync
 ```
 
 This exports your Apple Notes, parses your Word docs, chunks everything, generates embeddings via OpenAI, and stores it all in `~/mh-mind/corpus.db`.
@@ -84,7 +94,7 @@ This exports your Apple Notes, parses your Word docs, chunks everything, generat
 ### Chat with your notes
 
 ```bash
-streamlit run app.py
+uv run streamlit run app.py
 ```
 
 Opens the chat UI at [http://localhost:8501](http://localhost:8501). From there you can:

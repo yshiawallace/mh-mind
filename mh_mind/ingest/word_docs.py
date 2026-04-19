@@ -11,6 +11,8 @@ from pathlib import Path
 
 from docx import Document
 
+from mh_mind.ingest.footnotes import paragraph_text_with_notes, parse_notes
+
 logger = logging.getLogger(__name__)
 
 
@@ -30,12 +32,17 @@ def _parse_docx(path: Path) -> WordDoc | None:
         logger.warning("Could not parse %s: %s", path, e)
         return None
 
-    # Extract text from paragraphs and table cells
+    # Parse footnotes and endnotes from the .docx XML
+    notes = parse_notes(path)
+    if notes:
+        logger.info("Found %d footnotes/endnotes in %s", len(notes), path.name)
+
+    # Extract text from paragraphs (with inlined notes) and table cells
     parts: list[str] = []
 
     for para in doc.paragraphs:
-        text = para.text.strip()
-        if text:
+        text = paragraph_text_with_notes(para._element, notes)
+        if text.strip():
             parts.append(text)
 
     for table in doc.tables:

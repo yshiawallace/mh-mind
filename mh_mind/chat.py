@@ -20,6 +20,10 @@ corresponds to the context excerpt with that number.
 rather than guessing.
 4. Synthesise across multiple excerpts when relevant — don't just summarise one.
 5. Write in a clear, direct style. The user is an academic.
+6. Some excerpts contain scholarly references on lines starting with \
+[Footnote N]: or [Endnote N]:. When you see these, name the actual source \
+(author, title, year, page) in your answer. Distinguish between your excerpt \
+citation [1] and the scholarly source cited within that excerpt.
 """
 
 

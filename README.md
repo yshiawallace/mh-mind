@@ -119,13 +119,13 @@ Everything the app produces lives under `~/mh-mind/` (outside the repo):
 └── artifacts/             # auto-saved chat transcripts
 ```
 
-## Retrieval tuning — experiments
+# Retrieval Tuning Experiments
 
 This section documents what we've learned about how retrieval works and a set of
 experiments to tune it for academic legal writing. Each experiment should be run
 in isolation so we can feel the impact of each change independently.
 
-### How retrieval works (summary)
+## How retrieval works (summary)
 
 1. **Sync phase (one-time per document):** Each document is split into chunks of
    ~512 tokens (~380 words) with 64 tokens of overlap. Each chunk is sent to
@@ -148,7 +148,7 @@ in isolation so we can feel the impact of each change independently.
    excerpt 1), not to the scholarly sources cited within those documents. This
    is because the system prompt asks the LLM to cite by excerpt number.
 
-### Known issue: footnotes are lost during chunking
+## Known issue: footnotes are lost during chunking
 
 Word documents store footnotes separately from body text in the `.docx` format.
 When the text is extracted and chunked, footnote content ends up far from the
@@ -160,7 +160,7 @@ The fix is to resolve footnotes into the body text during ingestion — before
 chunking — so that each footnote's content travels with the passage that
 references it.
 
-### Experiment 1: Resolve footnotes during ingestion
+## Experiment 1: Resolve footnotes during ingestion
 
 **What to change:** Modify Word doc ingestion (`mh_mind/ingest/word_docs.py`) to
 parse footnotes from the `.docx` structure and inline them at the point of
@@ -179,7 +179,7 @@ current behaviour.
 prompt in `mh_mind/chat.py` to tell the LLM to surface scholarly sources found
 within excerpts, distinguishing them from excerpt numbers.
 
-### Experiment 2: Increase chunk size
+## Experiment 2: Increase chunk size
 
 **What to change:** In `mh_mind/config.py`, increase `CHUNK_SIZE_TOKENS` from
 512 to 1024 (~750 words, roughly two pages).
@@ -194,7 +194,7 @@ more ideas, and you fit fewer total chunks in the LLM's context.
 using. Pay attention to whether answers feel more contextually rich or whether
 they start including irrelevant material.
 
-### Experiment 3: Increase chunk overlap
+## Experiment 3: Increase chunk overlap
 
 **What to change:** In `mh_mind/config.py`, increase `CHUNK_OVERLAP_TOKENS` from
 64 to 128 (or 192).
@@ -211,7 +211,7 @@ chunk boundaries improves.
 spans what would be a chunk boundary. Compare whether the answer captures the
 full reasoning or cuts off mid-thought.
 
-### Experiment 4: Increase top_k (number of retrieved chunks)
+## Experiment 4: Increase top_k (number of retrieved chunks)
 
 **What to change:** In `mh_mind/chat.py`, increase the `top_k` default from 10
 to 15 or 20.
@@ -227,7 +227,7 @@ struggle to synthesise or may include irrelevant material.
 questions that span multiple documents and see if the answer draws on more
 sources. Also check whether the answer gets unfocused.
 
-### Experiment 5: Semantic chunking
+## Experiment 5: Semantic chunking
 
 **What to change:** Replace the fixed-size chunker in `mh_mind/chunk.py` with
 one that splits on structural boundaries — paragraph breaks, section headings,
@@ -243,7 +243,7 @@ config value.
 Chunks should feel like coherent passages rather than text that starts or ends
 mid-sentence.
 
-### Recommended experiment order
+## Recommended experiment order
 
 1. **Experiment 1 (footnotes)** — fixes a real data loss problem; independent of
    all other changes

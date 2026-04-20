@@ -83,13 +83,24 @@ Your corpus is stored and indexed locally. Chunk text is sent to OpenAI for embe
 
 If you installed with **uv**, prefix commands with `uv run` (or activate the venv with `source .venv/bin/activate` first).
 
-### Sync your corpus
+### Sync your corpus (all-in-one)
 
 ```bash
 uv run mh-mind sync
 ```
 
-This exports your Apple Notes, parses your Word docs, chunks everything, generates embeddings via OpenAI, and stores it all in `~/mh-mind/corpus.db`.
+This runs `ingest` then `embed` in one step — parses your documents, chunks them, generates embeddings, and stores everything in `~/mh-mind/corpus.db`.
+
+### Or run each step separately
+
+```bash
+uv run mh-mind ingest   # parse + chunk (no API calls)
+uv run mh-mind embed    # generate embeddings for unembedded chunks
+```
+
+`ingest` exports Apple Notes, parses Word docs (with footnotes inlined), chunks everything, and stores chunks in the database. No external API calls — this runs entirely locally.
+
+`embed` finds any chunks that don't have embeddings yet and calls OpenAI to generate them. If it gets interrupted (e.g. by a rate limit), just re-run it — it picks up where it left off.
 
 - First run: processes your entire corpus. This may take a few minutes.
 - Subsequent runs: only processes new or changed content (incremental).

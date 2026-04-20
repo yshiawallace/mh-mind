@@ -78,17 +78,20 @@ def init_db(db_path: Path) -> None:
 def upsert_chunks(
     db_path: Path,
     chunks: list[Chunk],
-    embeddings: list[list[float]],
+    embeddings: list[list[float]] | None = None,
     conn: sqlite3.Connection | None = None,
 ) -> None:
-    """Insert or replace chunks and their embeddings transactionally.
+    """Insert or replace chunks (and optionally their embeddings) transactionally.
 
     All existing chunks for the same source_id are deleted first
     (a source document is re-chunked as a whole unit).
+
+    If embeddings is None, chunks are stored without embeddings.
+    Use store_embeddings() later to add them.
     """
     if not chunks:
         return
-    if len(chunks) != len(embeddings):
+    if embeddings is not None and len(chunks) != len(embeddings):
         raise ValueError(f"chunks ({len(chunks)}) and embeddings ({len(embeddings)}) must be the same length")
 
     with nullcontext(conn) if conn else connect(db_path) as conn:
@@ -104,17 +107,18 @@ def upsert_chunks(
                 conn.execute(f"DELETE FROM chunk_embeddings WHERE rowid IN ({placeholders})", old_ids)
                 conn.execute(f"DELETE FROM chunks WHERE id IN ({placeholders})", old_ids)
 
-        # Insert new chunks and embeddings
-        for chunk, emb in zip(chunks, embeddings):
+        # Insert new chunks (and embeddings if provided)
+        for i, chunk in enumerate(chunks):
             cursor = conn.execute(
                 "INSERT INTO chunks (text, source, source_id, position, metadata) VALUES (?, ?, ?, ?, ?)",
                 (chunk.text, chunk.source, chunk.source_id, chunk.position, json.dumps(chunk.metadata)),
             )
             rowid = cursor.lastrowid
-            conn.execute(
-                "INSERT INTO chunk_embeddings (rowid, embedding) VALUES (?, ?)",
-                (rowid, _serialize_f32(emb)),
-            )
+            if embeddings is not None:
+                conn.execute(
+                    "INSERT INTO chunk_embeddings (rowid, embedding) VALUES (?, ?)",
+                    (rowid, _serialize_f32(embeddings[i])),
+                )
 
         conn.commit()
 
@@ -155,6 +159,50 @@ def get_source_hash(
             (source_id,),
         ).fetchone()
         return row["content_hash"] if row else None
+
+
+def get_unembedded_chunks(
+    db_path: Path,
+    conn: sqlite3.Connection | None = None,
+) -> list[dict]:
+    """Return chunks that don't have embeddings yet.
+
+    Returns:
+        List of dicts with keys: id, text.
+    """
+    with nullcontext(conn) if conn else connect(db_path) as conn:
+        rows = conn.execute("""
+            SELECT c.id, c.text
+            FROM chunks c
+            LEFT JOIN chunk_embeddings v ON c.id = v.rowid
+            WHERE v.rowid IS NULL
+        """).fetchall()
+        return [{"id": row["id"], "text": row["text"]} for row in rows]
+
+
+def store_embeddings(
+    db_path: Path,
+    chunk_ids: list[int],
+    embeddings: list[list[float]],
+    conn: sqlite3.Connection | None = None,
+) -> None:
+    """Store embeddings for existing chunks that were ingested without them.
+
+    Args:
+        db_path: Path to the SQLite database.
+        chunk_ids: List of chunk row IDs.
+        embeddings: Corresponding embedding vectors.
+    """
+    if len(chunk_ids) != len(embeddings):
+        raise ValueError(f"chunk_ids ({len(chunk_ids)}) and embeddings ({len(embeddings)}) must be the same length")
+
+    with nullcontext(conn) if conn else connect(db_path) as conn:
+        for chunk_id, emb in zip(chunk_ids, embeddings):
+            conn.execute(
+                "INSERT INTO chunk_embeddings (rowid, embedding) VALUES (?, ?)",
+                (chunk_id, _serialize_f32(emb)),
+            )
+        conn.commit()
 
 
 def search(

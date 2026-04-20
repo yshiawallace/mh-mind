@@ -5,7 +5,9 @@ stays local — only individual chunks are sent per API call.
 """
 
 import logging
+import math
 import os
+import time
 
 from openai import OpenAI
 
@@ -14,6 +16,7 @@ from mh_mind.config import EMBEDDING_DIM, EMBEDDING_MODEL
 logger = logging.getLogger(__name__)
 
 _BATCH_SIZE = 50  # ~25K tokens per request at 512 tokens/chunk (API limit: 30K)
+_BATCH_DELAY = 1.0  # seconds between batches to avoid rate limits
 
 # Lazy-loaded singleton client
 _client: OpenAI | None = None
@@ -27,7 +30,7 @@ def _get_client() -> OpenAI:
             raise ValueError(
                 "OPENAI_API_KEY is not set. Add it to your .env file or environment."
             )
-        _client = OpenAI(api_key=api_key, max_retries=3)
+        _client = OpenAI(api_key=api_key, max_retries=10)
     return _client
 
 
@@ -45,11 +48,17 @@ def embed_documents(texts: list[str]) -> list[list[float]]:
 
     client = _get_client()
     all_embeddings: list[list[float]] = []
+    total_batches = math.ceil(len(texts) / _BATCH_SIZE)
 
-    for i in range(0, len(texts), _BATCH_SIZE):
+    for batch_num, i in enumerate(range(0, len(texts), _BATCH_SIZE), 1):
         batch = texts[i : i + _BATCH_SIZE]
+        logger.info("Embedding batch %d/%d (%d chunks)...", batch_num, total_batches, len(batch))
         response = client.embeddings.create(model=EMBEDDING_MODEL, input=batch)
         all_embeddings.extend([item.embedding for item in response.data])
+
+        # Pause between batches to avoid rate limits (skip after last batch)
+        if batch_num < total_batches:
+            time.sleep(_BATCH_DELAY)
 
     return all_embeddings
 

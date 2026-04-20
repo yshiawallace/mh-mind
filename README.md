@@ -118,6 +118,7 @@ Everything the app produces lives under `~/mh-mind/` (outside the repo):
 ~/mh-mind/
 ├── corpus.db              # chunks + embeddings + metadata
 ├── notes_export/          # raw AppleScript output
+├── docs_export/           # parsed Word doc text (for inspection)
 ├── docs_paths.yaml        # list of configured Word-doc folders (you create this)
 └── artifacts/             # auto-saved chat transcripts
 ```

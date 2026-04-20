@@ -1,4 +1,4 @@
-"""CLI entry points: `mh-mind sync` and `mh-mind chat`."""
+"""CLI entry points: `mh-mind ingest`, `mh-mind embed`, `mh-mind sync`, `mh-mind chat`."""
 
 import argparse
 import hashlib
@@ -16,10 +16,9 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
-def cmd_sync(args: argparse.Namespace) -> int:
-    """Ingest Apple Notes + Word docs, chunk, embed, and store."""
+def cmd_ingest(args: argparse.Namespace) -> int:
+    """Parse Apple Notes + Word docs, chunk, and store (no embedding API calls)."""
     from mh_mind.chunk import chunk_text
-    from mh_mind.embed import embed_documents
     from mh_mind.ingest.apple_notes import export_notes
     from mh_mind.ingest.word_docs import load_docs
     from mh_mind.store import (
@@ -47,7 +46,6 @@ def cmd_sync(args: argparse.Namespace) -> int:
     docs = load_docs(doc_paths) if doc_paths else []
 
     # --- Collect changed documents and chunk them ---
-    # Each entry: (chunks, source_id, source_type, content_hash)
     pending: list[tuple[list, str, str, str]] = []
 
     skipped_notes = 0
@@ -105,17 +103,10 @@ def cmd_sync(args: argparse.Namespace) -> int:
             if chunks:
                 pending.append((chunks, source_id, "docs", content_hash))
 
-        # --- Batch-embed all chunks in one API call ---
-        all_texts = [c.text for chunks, _, _, _ in pending for c in chunks]
-        all_embeddings = embed_documents(all_texts) if all_texts else []
-
-        # --- Upsert each document's chunks with its slice of embeddings ---
-        offset = 0
+        # Store chunks WITHOUT embeddings
         for chunks, source_id, source_type, content_hash in pending:
-            n = len(chunks)
-            upsert_chunks(CORPUS_DB, chunks, all_embeddings[offset:offset + n], conn=conn)
+            upsert_chunks(CORPUS_DB, chunks, conn=conn)
             update_source_hash(CORPUS_DB, source_id, source_type, content_hash, conn=conn)
-            offset += n
 
     logger.info(
         "Apple Notes: %d processed, %d unchanged (skipped)",
@@ -129,8 +120,50 @@ def cmd_sync(args: argparse.Namespace) -> int:
         exported_docs,
         DOCS_EXPORT_DIR,
     )
-    logger.info("Sync complete. %d documents processed.", len(pending))
+
+    total_chunks = sum(len(chunks) for chunks, _, _, _ in pending)
+    logger.info("Ingest complete. %d documents processed, %d chunks stored.", len(pending), total_chunks)
+    logger.info("Run `mh-mind embed` to generate embeddings for new chunks.")
     return 0
+
+
+def cmd_embed(args: argparse.Namespace) -> int:
+    """Generate embeddings for any chunks that don't have them yet."""
+    from mh_mind.embed import embed_documents
+    from mh_mind.store import (
+        connect,
+        get_unembedded_chunks,
+        init_db,
+        store_embeddings,
+    )
+
+    init_db(CORPUS_DB)
+
+    with connect(CORPUS_DB) as conn:
+        unembedded = get_unembedded_chunks(CORPUS_DB, conn=conn)
+
+        if not unembedded:
+            logger.info("All chunks already have embeddings. Nothing to do.")
+            return 0
+
+        logger.info("Found %d chunks without embeddings. Calling OpenAI API...", len(unembedded))
+
+        chunk_ids = [c["id"] for c in unembedded]
+        texts = [c["text"] for c in unembedded]
+        embeddings = embed_documents(texts)
+
+        store_embeddings(CORPUS_DB, chunk_ids, embeddings, conn=conn)
+
+    logger.info("Embed complete. %d chunks embedded.", len(unembedded))
+    return 0
+
+
+def cmd_sync(args: argparse.Namespace) -> int:
+    """Ingest + embed in one step (convenience command)."""
+    result = cmd_ingest(args)
+    if result != 0:
+        return result
+    return cmd_embed(args)
 
 
 def cmd_chat(args: argparse.Namespace) -> int:
@@ -144,11 +177,18 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="mh-mind")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("sync", help="Ingest Apple Notes and Word docs into the local corpus.")
+    sub.add_parser("ingest", help="Parse and chunk documents (no API calls).")
+    sub.add_parser("embed", help="Generate embeddings for unembedded chunks.")
+    sub.add_parser("sync", help="Ingest + embed in one step.")
     sub.add_parser("chat", help="Chat with your notes in the terminal.")
 
     args = parser.parse_args(argv)
-    handlers = {"sync": cmd_sync, "chat": cmd_chat}
+    handlers = {
+        "ingest": cmd_ingest,
+        "embed": cmd_embed,
+        "sync": cmd_sync,
+        "chat": cmd_chat,
+    }
     return handlers[args.command](args)
 
 

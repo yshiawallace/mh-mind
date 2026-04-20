@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 DATA_DIR = Path.home() / "mh-mind"
 CORPUS_DB = DATA_DIR / "corpus.db"
 NOTES_EXPORT_DIR = DATA_DIR / "notes_export"
+DOCS_EXPORT_DIR = DATA_DIR / "docs_export"
 DOCS_PATHS_CONFIG = DATA_DIR / "docs_paths.yaml"
 ARTIFACTS_DIR = DATA_DIR / "artifacts"
 

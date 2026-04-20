@@ -8,6 +8,7 @@ import sys
 from mh_mind.config import (
     CORPUS_DB,
     DATA_DIR,
+    DOCS_EXPORT_DIR,
     load_docs_paths,
 )
 
@@ -75,6 +76,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
             if chunks:
                 pending.append((chunks, note.id, "notes", content_hash))
 
+        exported_docs = 0
         for doc in docs:
             content_hash = hashlib.sha256(doc.body.encode()).hexdigest()[:16]
             source_id = str(doc.path)
@@ -83,6 +85,12 @@ def cmd_sync(args: argparse.Namespace) -> int:
             if stored_hash == content_hash:
                 skipped_docs += 1
                 continue
+
+            # Write parsed text to disk for inspection
+            DOCS_EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+            export_path = DOCS_EXPORT_DIR / f"{doc.title}.txt"
+            export_path.write_text(doc.body, encoding="utf-8")
+            exported_docs += 1
 
             chunks = chunk_text(
                 text=doc.body,
@@ -115,9 +123,11 @@ def cmd_sync(args: argparse.Namespace) -> int:
         skipped_notes,
     )
     logger.info(
-        "Word docs: %d processed, %d unchanged (skipped)",
+        "Word docs: %d processed, %d unchanged (skipped), %d exported to %s",
         len(docs) - skipped_docs,
         skipped_docs,
+        exported_docs,
+        DOCS_EXPORT_DIR,
     )
     logger.info("Sync complete. %d documents processed.", len(pending))
     return 0

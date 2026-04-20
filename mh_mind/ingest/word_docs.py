@@ -62,23 +62,31 @@ def _parse_docx(path: Path) -> WordDoc | None:
     return WordDoc(title=title, body=body, path=path, modified=modified)
 
 
-def load_docs(folder_paths: list[Path]) -> list[WordDoc]:
-    """Walk the given folders and parse all .docx files found.
+def load_docs(paths: list[Path]) -> list[WordDoc]:
+    """Load Word documents from a mix of directories and file paths.
 
     Args:
-        folder_paths: Directories to search recursively for .docx files.
+        paths: Directories (walked recursively) and/or individual .docx file paths.
 
     Returns:
         List of parsed WordDoc dataclasses.
     """
     docs: list[WordDoc] = []
 
-    for folder in folder_paths:
-        if not folder.is_dir():
-            logger.warning("Skipping non-existent folder: %s", folder)
+    for entry in paths:
+        if entry.is_file():
+            # Direct file path — parse it directly
+            doc = _parse_docx(entry)
+            if doc is not None:
+                docs.append(doc)
             continue
 
-        for path in sorted(folder.rglob("*")):
+        if not entry.is_dir():
+            logger.warning("Skipping non-existent path: %s", entry)
+            continue
+
+        # Directory — walk recursively for .docx files
+        for path in sorted(entry.rglob("*")):
             # Skip hidden files and directories
             if any(part.startswith(".") for part in path.parts):
                 continue
@@ -100,5 +108,5 @@ def load_docs(folder_paths: list[Path]) -> list[WordDoc]:
             if doc is not None:
                 docs.append(doc)
 
-    logger.info("Loaded %d Word documents from %d folders", len(docs), len(folder_paths))
+    logger.info("Loaded %d Word documents from %d paths", len(docs), len(paths))
     return docs

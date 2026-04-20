@@ -23,19 +23,23 @@ DEFAULT_LLM_MODEL = "anthropic/claude-sonnet-4-5"
 
 
 def load_docs_paths() -> list[Path]:
-    """Load the list of Word-doc folder paths from docs_paths.yaml.
+    """Load the list of Word-doc paths from docs_paths.yaml.
 
-    The YAML file should contain a list of directory paths, e.g.:
+    The YAML file should contain a list of directory or file paths, e.g.:
 
         - /Users/me/Documents/Papers
         - /Users/me/Dropbox/Drafts
+        - /Users/me/Documents/specific-file.docx
+
+    Directories are walked recursively for .docx files during ingestion.
+    Individual .docx file paths are ingested directly.
 
     Returns an empty list (with a warning) if the file doesn't exist.
     """
     if not DOCS_PATHS_CONFIG.exists():
         logger.warning(
             "No docs_paths.yaml found at %s — no Word docs will be ingested. "
-            "Create this file with a list of folder paths to enable Word doc ingestion.",
+            "Create this file with a list of folder or file paths to enable Word doc ingestion.",
             DOCS_PATHS_CONFIG,
         )
         return []
@@ -50,9 +54,13 @@ def load_docs_paths() -> list[Path]:
     paths = []
     for entry in data:
         p = Path(entry).expanduser()
-        if not p.is_dir():
-            logger.warning("Skipping non-existent directory: %s", p)
-            continue
-        paths.append(p)
+        if p.is_dir():
+            paths.append(p)
+        elif p.is_file() and p.suffix.lower() == ".docx":
+            paths.append(p)
+        elif p.is_file() and p.suffix.lower() == ".doc":
+            logger.warning("Skipping pre-2007 .doc file (not supported): %s", p)
+        else:
+            logger.warning("Skipping non-existent or unsupported path: %s", p)
 
     return paths

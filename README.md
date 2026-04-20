@@ -63,12 +63,15 @@ Your corpus is stored and indexed locally. Chunk text is sent to OpenAI for embe
    mkdir -p ~/mh-mind
    ```
 
-   Then create `~/mh-mind/docs_paths.yaml` with a list of folders containing your `.docx` files:
+   Then create `~/mh-mind/docs_paths.yaml` with a list of folders and/or individual `.docx` files:
 
    ```yaml
    - /Users/yourname/Documents/Papers
    - /Users/yourname/Dropbox/Drafts
+   - /Users/yourname/Documents/specific-file.docx
    ```
+
+   Directories are walked recursively for `.docx` files. Individual file paths are ingested directly.
 
    Note: this file lives in the `~/mh-mind/` data directory, not in the project repo.
 

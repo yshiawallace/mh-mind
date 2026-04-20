@@ -36,7 +36,9 @@ def _parse_notes_xml(xml_bytes: bytes, tag_name: str, prefix: str) -> dict[str, 
     notes: dict[str, str] = {}
 
     for note_el in root.findall(f"{_W}{tag_name}"):
-        note_id = note_el.get(f"{_W}id")
+        # Try namespace-qualified w:id first, fall back to plain id.
+        # Real Word documents vary in whether the attribute is qualified.
+        note_id = note_el.get(f"{_W}id") or note_el.get("id")
         if note_id is None or note_id in _SKIP_IDS:
             continue
 
@@ -110,11 +112,11 @@ def _collect_runs(element, notes, text_parts, referenced_notes):
                 if run_child.tag == f"{_W}t" and run_child.text:
                     text_parts.append(run_child.text)
                 elif run_child.tag == f"{_W}footnoteReference":
-                    note_id = run_child.get(f"{_W}id")
+                    note_id = run_child.get(f"{_W}id") or run_child.get("id")
                     if note_id and note_id not in _SKIP_IDS:
                         referenced_notes.append(("fn", note_id, "Footnote"))
                 elif run_child.tag == f"{_W}endnoteReference":
-                    note_id = run_child.get(f"{_W}id")
+                    note_id = run_child.get(f"{_W}id") or run_child.get("id")
                     if note_id and note_id not in _SKIP_IDS:
                         referenced_notes.append(("en", note_id, "Endnote"))
 
